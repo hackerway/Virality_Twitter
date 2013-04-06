@@ -5,6 +5,12 @@ import datetime
 from collections import OrderedDict
 import numpy
 import matplotlib.pyplot as plt
+import datetime as dt
+import matplotlib.pyplot as plt
+import matplotlib.dates as dates
+from datetime import datetime
+from datetime import date, timedelta
+
 
 class Ddict(dict):
 	def __init__(self, default=None):
@@ -16,43 +22,84 @@ class Ddict(dict):
 		return dict.__getitem__(self, key)
 
 
+class Feature_Set:
+	
+	   def __init__(self,start,end):
+	   	 
+	   	 self.edge_density_dict=self.get_dictionary(start,end,0.0)		
+	   	 self.newuser_percentage_dict=self.get_dictionary(start,end,0.0)
+	   	 self.connected_component_dict=self.get_dictionary(start,end,0)
+	   	 self.growth_gcc_dict=self.get_dictionary(start,end,0)
+	   	 self.prev_users=set([])
+	     
+	   def edge_density(self,date,graph):
+	   	 vertices=len(graph.nodes())
+	   	 edges=len(graph.edges())
+	   	 density=0
+	   	 try:
+	   	  if vertices>0:
+	   		 density=float((2*edges))/float((vertices*(vertices-1)))
+	   		 self.edge_density_dict[date]=density
+	   	 except:
+	   		 pass
+	   		
+	   
+	   def connected_components(self,date,graph):
+	   	   self.connected_component_dict[date]=nx.number_connected_components(graph)
+	   
+	   
+	   def size_gaint_connected_components(self,date,graph):
+	   	   self.growth_gcc_dict[date]=nx.connected_component_subgraphs(graph)[0]	   	   
+	   
+	   def percentage_new_user(self,date,graph):
+	   		new_users=set([])
+	   		for node in graph.nodes():
+	   	   	   if node not in self.prev_users:
+	   	   	   	  new_users.add(node)
+	   	   	if len(self.prev_users)==0:temp=1
+	   	   	else:temp=len(self.prev_users)
+	   	   	delta=float((len(new_users)-len(self.prev_users)))/float(temp)
+	   	   	self.newuser_percentage_dict[date]=delta
+	   	   	self.prev_users=new_users	   
+	       
+
+	   def get_dictionary(self,start,end,value):
+	
+		 dictionary={}
+		 start=start.split('-')
+		 end=end.split('-')
+		 start=datetime.datetime(int(start[0]),int(start[1]),int(start[2]))
+		 end=datetime.datetime(int(end[0]),int(end[1]),int(end[2]))
+		 step=datetime.timedelta(days=1)
+		 while start<=end:
+			date=start.strftime('%Y-%m-%d')
+			dictionary[date]=value
+			start+=step
+		 dictionary=OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))	
+		 return dictionary	
+
+
+class TimeSeries:
+	
+	def generate_plot(self,x,y,title,labelX,labelY,filename):
+		figure=plt.figure()
+		x=dates.datestr2num(x)
+		plt.title(title)
+		plt.ylabel(labelY)
+		plt.xlabel(labelX)
+		figure.autofmt_xdate()
+		plt.plot_date(x, y, fmt="r-",color='orange')
+		plt.savefig(filename,dpi=(600))
+    	plt.close()
+	    
+
+
 def connect_db():
 
    client = pymongo.MongoClient("localhost", 27017)
    db = client.follower_network
    return db
    
-def file_reader():
-   try:
-	   fread=gzip.open("follower_list.dat.gz")
-	   fread=fread.readlines()
-	   read_follower(fread)
-   except:
-	   print "Passes"
-	   pass
-
-
-
-def read_follower(reader):  
-
-	index=1
-	db=connect_db()
-	for line in reader:
-		print 'Record: ',index
-		index+=1
-		div=line.split(':')
-		user=str(div[0].strip())
-		following=div[1].split(',')
-		for follow in following:
-			try: 
-				if follow!=None or follow!=' ':
-					value=str(follow.strip())
-					db.my_collection.save({"followee":user,"follower":value})             
-			except:
-										
-					pass
-	db.my_collection.create_index('followee')      
-
 
 def read_timeline():
     
@@ -61,9 +108,16 @@ def read_timeline():
     #for line in range(3,10):
     generate_graph(fread[3])
 
+def generate_graph_util(read):
+	
+	feature_set=Feature_Set('2012-04-01','2012-04-30')
+	
+	
+	
+	
 
 
-def generate_graph(line):
+def generate_graph(line,features):
         
    db=connect_db()
    hash_network={}
@@ -92,10 +146,10 @@ def generate_graph(line):
               hash_network[date]=node_list
            
    ordered_network = OrderedDict(sorted(hash_network.items(), key=lambda t: t[0]))
-   generate_dependent_graph(db,ordered_network)
+   generate_dependent_graph(db,ordered_network,features)
    #generate_independent_graph(db,ordered_network)
    
-def generate_dependent_graph(db,network):
+def generate_dependent_graph(db,network,features):
    
    index=0
    for time in network:
@@ -104,7 +158,6 @@ def generate_dependent_graph(db,network):
           graph=nx.Graph()
           graph.add_nodes_from(prev_list)
           graph=add_egdes(db,graph,prev_list)
-          #print nx.connected_component_subgraphs(graph)
           draw_graph(graph,time)
            
        else:
@@ -114,12 +167,11 @@ def generate_dependent_graph(db,network):
            graph=nx.Graph()
            graph.add_nodes_from(current_list)
            graph=add_egdes(db,graph,current_list)
-           #print nx.connected_component_subgraphs(graph)
            draw_graph(graph,time)
            prev_list=current_list
        index+=1    
  
-def generate_independent_graph(db,network):
+def generate_independent_graph(db,network,features):
 
     for time in network:
         current_list=network[time]
@@ -146,51 +198,9 @@ def add_egdes(db,graph,nodes):
                         graph.add_edge(node1,node2)
     return graph                    
 
-def get_edge_density(graph):
-
-    vertices=len(graph.nodes())
-    edges=len(graph.edges())
-    density=0
-    try:
-      if vertices>0:
-       density=(2*edges)/(vertices*(vertices-1))
-    except:
-        pass
-    return density
 
 
-def percentage_new_users():
-    print 'rohit'
-    
-
-def number_connected_components(): 
-   print 'rohit'
-
-
-def growth_gcc():
-	print 'rohit'        
-
-def get_date_dictionary(start,end):
-	
-	dictionary={}
-	start=start.split('-')
-	sday=int(start[-1])
-	smonth=int(start[1])
-	syear=int(start[0])
-	end=end.split('-')
-	eday=int(end[-1])
-	emonth=int(end[1])
-	eyear=int(end[0])
-	start=datetime.datetime(syear,smonth,sday)
-	end=datetime.datetime(eyear,emonth,eday)
-	step=datetime.timedelta(days=1)
-	while start<=end:
-		date=start.strftime('%Y-%m-%d')
-		dictionary[date]=[]
-		start+=step
-	dictionary=OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))	
-	return dictionary	
-
+       
 def get_date(timestamp):
 
     time= datetime.datetime.fromtimestamp(float(timestamp))
