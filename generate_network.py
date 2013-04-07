@@ -1,17 +1,27 @@
 import networkx as nx
 import sys,gzip
 import pymongo
-import datetime
 from collections import OrderedDict
 import numpy
+import datetime
 import matplotlib.pyplot as plt
-import datetime as dt
+from datetime import datetime
+from datetime import date,timedelta
 import matplotlib.pyplot as plt
 import matplotlib.dates as dates
-from datetime import datetime
-from datetime import date, timedelta
+import os
 
 
+def init_path():
+	try:
+		os.chdir(sys.argv[1])
+		if not os.path.exists("Graphs"):
+			os.makedirs("Graphs")
+			os.chdir(sys.argv[1]+"\\Graphs")
+	except:
+		print 'Path doesnt exists'
+		sys.exit()
+	
 class Ddict(dict):
 	def __init__(self, default=None):
 		self.default = default
@@ -31,6 +41,7 @@ class Feature_Set:
 	   	 self.connected_component_dict=self.get_dictionary(start,end,0)
 	   	 self.growth_gcc_dict=self.get_dictionary(start,end,0)
 	   	 self.prev_users=set([])
+	   	 self.hashtag=''
 	     
 	   def edge_density(self,date,graph):
 	   	 vertices=len(graph.nodes())
@@ -45,11 +56,13 @@ class Feature_Set:
 	   		
 	   
 	   def connected_components(self,date,graph):
+	   	   
 	   	   self.connected_component_dict[date]=nx.number_connected_components(graph)
 	   
 	   
 	   def size_gaint_connected_components(self,date,graph):
-	   	   self.growth_gcc_dict[date]=nx.connected_component_subgraphs(graph)[0]	   	   
+	   	   
+	   	   self.growth_gcc_dict[date]=len(list(nx.connected_component_subgraphs(graph)[0]))	   	   
 	   
 	   def percentage_new_user(self,date,graph):
 	   		new_users=set([])
@@ -68,9 +81,9 @@ class Feature_Set:
 		 dictionary={}
 		 start=start.split('-')
 		 end=end.split('-')
-		 start=datetime.datetime(int(start[0]),int(start[1]),int(start[2]))
-		 end=datetime.datetime(int(end[0]),int(end[1]),int(end[2]))
-		 step=datetime.timedelta(days=1)
+		 start=datetime(int(start[0]),int(start[1]),int(start[2]))
+		 end=datetime(int(end[0]),int(end[1]),int(end[2]))
+		 step=timedelta(days=1)
 		 while start<=end:
 			date=start.strftime('%Y-%m-%d')
 			dictionary[date]=value
@@ -78,46 +91,34 @@ class Feature_Set:
 		 dictionary=OrderedDict(sorted(dictionary.items(), key=lambda t: t[0]))	
 		 return dictionary	
 
-
-class TimeSeries:
-	
-	def generate_plot(self,x,y,title,labelX,labelY,filename):
-		figure=plt.figure()
-		x=dates.datestr2num(x)
-		plt.title(title)
-		plt.ylabel(labelY)
-		plt.xlabel(labelX)
-		figure.autofmt_xdate()
-		plt.plot_date(x, y, fmt="r-",color='orange')
-		plt.savefig(filename,dpi=(600))
-    	plt.close()
-	    
-
-
 def connect_db():
 
-   client = pymongo.MongoClient("localhost", 27017)
-   db = client.follower_network
-   return db
+    client = pymongo.MongoClient("localhost", 27017)
+    db = client.follower_network
+    return db
    
 
 def read_timeline():
     
-    fread=open('timeline.data','r').readlines()
+    fread=open(sys.argv[2],'r').readlines()
     big_chunk=[]
     #for line in range(3,10):
-    generate_graph(fread[3])
+    generate_graph_util(fread[3])
 
 def generate_graph_util(read):
 	
+	dep_network,hashtag=generate_graph(read)
 	feature_set=Feature_Set('2012-04-01','2012-04-30')
+	feature_set.hashtag=hashtag
+	generate_dependent_graph(dep_network,feature_set)
+	print hashtag
+	ind_network,hashtag=generate_graph(read)
+	features=Feature_Set('2012-04-01','2012-04-30')
+	features.hashtag=hashtag
+	generate_independent_graph(ind_network,features)
 	
 	
-	
-	
-
-
-def generate_graph(line,features):
+def generate_graph(line):
         
    db=connect_db()
    hash_network={}
@@ -134,7 +135,6 @@ def generate_graph(line,features):
            time=float(temp[1].strip())
            date=get_date(time)
            twitter_id=temp[0].strip()
-
            if date in hash_network:
                    node_list=hash_network[date]
                    if twitter_id:
@@ -145,12 +145,43 @@ def generate_graph(line,features):
               node_list.append(twitter_id)
               hash_network[date]=node_list
            
-   ordered_network = OrderedDict(sorted(hash_network.items(), key=lambda t: t[0]))
-   generate_dependent_graph(db,ordered_network,features)
-   #generate_independent_graph(db,ordered_network)
+   return OrderedDict(sorted(hash_network.items(), key=lambda t: t[0])),hashtag
    
-def generate_dependent_graph(db,network,features):
    
+def features_util(features,date,graph):
+	
+	features.edge_density(date,graph)
+	features.connected_components(date, graph)
+	features.percentage_new_user(date, graph)
+	features.size_gaint_connected_components(date, graph)
+
+def plot_graph(features,type_folder):	
+	
+	if not os.path.exists(features.hashtag+"\\"+type_folder):
+		os.makedirs(features.hashtag+"\\"+type_folder)
+		
+	generate_plot(list(features.edge_density_dict.keys()),list(features.edge_density_dict.values()),"Edge Density "+features.hashtag,"Dates","Density",features.hashtag+"\\"+type_folder+"\\Edge_Density")
+	generate_plot(list(features.newuser_percentage_dict.keys()),list(features.newuser_percentage_dict.values()),"Percentage of New Users "+features.hashtag,"Dates","Value",features.hashtag+"\\"+type_folder+"\\New_Users")
+	generate_plot(list(features.connected_component_dict.keys()),list(features.connected_component_dict.values()),"Connected Component "+features.hashtag,"Dates","Connected Components",features.hashtag+"\\"+type_folder+"\\Connected_Components")
+	generate_plot(list(features.growth_gcc_dict.keys()),list(features.growth_gcc_dict.values()),"GCC Growth "+features.hashtag,"Dates","Growth Rate",features.hashtag+"\\"+type_folder+"\\GCC_Growth")
+    
+def generate_plot(x,y,title,labelX,labelY,filename):
+
+    figure=plt.figure()
+    x=dates.datestr2num(x)
+    #print '######################'+title+'#######################'
+    #print y
+    
+    plt.title(title)
+    plt.ylabel(labelY)
+    plt.xlabel(labelX)
+    figure.autofmt_xdate()
+    plt.plot_date(x, y, fmt="r-",color='orange')
+    plt.savefig(filename,dpi=(600))
+    plt.close()
+
+def generate_dependent_graph(network,features):
+   db=connect_db()
    index=0
    for time in network:
        if index==0:
@@ -158,28 +189,35 @@ def generate_dependent_graph(db,network,features):
           graph=nx.Graph()
           graph.add_nodes_from(prev_list)
           graph=add_egdes(db,graph,prev_list)
-          draw_graph(graph,time)
-           
+          features_util(features,time,graph)
+          draw_graph(graph,time,features,"dependent")        
        else:
                
            current_list=network[time]
            current_list.extend(prev_list)
+           
            graph=nx.Graph()
            graph.add_nodes_from(current_list)
            graph=add_egdes(db,graph,current_list)
-           draw_graph(graph,time)
            prev_list=current_list
+           features_util(features,time,graph)
+           draw_graph(graph,time,features,"dependent")
        index+=1    
- 
-def generate_independent_graph(db,network,features):
-
+   
+   plot_graph(features,"dependent")
+    
+def generate_independent_graph(network,features):
+	
+    db=connect_db()
     for time in network:
-        current_list=network[time]
+    	current_list=network[time]
         graph=nx.Graph()
         graph.add_nodes_from(current_list)
         graph=add_egdes(db,graph,current_list)
-        draw_graph(graph,time)             
-
+        draw_graph(graph,time,features,"independent")             
+        features_util(features,time,graph)
+    
+    plot_graph(features,"independent")
    
 def add_egdes(db,graph,nodes):
 
@@ -202,20 +240,49 @@ def add_egdes(db,graph,nodes):
 
        
 def get_date(timestamp):
-
-    time= datetime.datetime.fromtimestamp(float(timestamp))
-    date='-'.join([str(time.year),str(time.month),str(time.day)])
-    return date      
+    
+    time= datetime.fromtimestamp(float(timestamp))
+    return time.strftime('%Y-%m-%d')
+          
    
 
-def draw_graph(graph,time):
-
-        nx.draw_random(graph)
-        plt.show()
+def draw_graph(graph,time,features,type_folder):
         
+      
 
+	G=nx.random_geometric_graph(200,0.125)
+# position is stored as node attribute data for random_geometric_graph
+	pos=nx.get_node_attributes(G,'pos')
+
+# find node near center (0.5,0.5)
+	dmin=1
+	ncenter=0
+	for n in pos:
+		x,y=pos[n]
+		d=(x-0.5)**2+(y-0.5)**2
+		if d<dmin:
+			ncenter=n
+			dmin=d
+
+# color by path length from node near center
+	p=nx.single_source_shortest_path_length(G,ncenter)
+
+	plt.figure(figsize=(8,8))
+	nx.draw_networkx_edges(G,pos,nodelist=[ncenter],alpha=0.4)
+	nx.draw_networkx_nodes(G,pos,nodelist=p.keys(),
+                       node_size=80,
+                       node_color=p.values(),
+                       cmap=plt.cm.Reds_r)
+
+	plt.xlim(-0.05,1.05)
+	plt.ylim(-0.05,1.05)
+	plt.axis('off')
+	plt.savefig('random_geometric_graph.png')
+	plt.show()
+	plt.close()
 def main():
    global follower_dict
+   init_path()
    follower_dict=Ddict(dict)
    read_timeline()
    
