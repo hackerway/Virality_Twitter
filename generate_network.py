@@ -1,3 +1,4 @@
+from __future__ import division
 import networkx as nx
 import sys,gzip
 import pymongo
@@ -56,22 +57,28 @@ class Feature_Set:
 	   		
 	   
 	   def connected_components(self,date,graph):
-	   	   
-	   	   self.connected_component_dict[date]=nx.number_connected_components(graph)
-	   
+	   	   try:
+	   	        self.connected_component_dict[date]=nx.number_connected_components(graph)
+	   	   except:
+	       	    pass
 	   
 	   def size_gaint_connected_components(self,date,graph):
-	   	   
-	   	   self.growth_gcc_dict[date]=len(list(nx.connected_component_subgraphs(graph)[0]))	   	   
-	   
+	   	   try:
+	   	   		self.growth_gcc_dict[date]=len(list(nx.connected_component_subgraphs(graph)[0]))/len(graph.nodes())	   	   
+	   	   		
+	   	   except:
+	       	    pass
 	   def percentage_new_user(self,date,graph):
 	   		new_users=set([])
 	   		for node in graph.nodes():
 	   	   	   if node not in self.prev_users:
 	   	   	   	  new_users.add(node)
-	   	   	if len(self.prev_users)==0:temp=1
-	   	   	else:temp=len(self.prev_users)
-	   	   	delta=float((len(new_users)-len(self.prev_users)))/float(temp)
+	   	   	delta=0.0
+	   	   	try:
+	   	   		delta=float(len(new_users))/float(len(graph.nodes()))
+	   	   	except:
+	   	   		delta=0.0
+	   	   		pass	
 	   	   	self.newuser_percentage_dict[date]=delta
 	   	   	self.prev_users=new_users	   
 	       
@@ -102,9 +109,13 @@ def read_timeline():
     
     fread=open(sys.argv[2],'r').readlines()
     big_chunk=[]
-    #for line in range(3,10):
-    generate_graph_util(fread[3])
-
+    index=0
+    #check 367
+    for line in range(368,len(fread)):
+    	try:
+     		generate_graph_util(fread[line])
+        except:
+        	pass
 def generate_graph_util(read):
 	
 	dep_network,hashtag=generate_graph(read)
@@ -247,39 +258,22 @@ def get_date(timestamp):
    
 
 def draw_graph(graph,time,features,type_folder):
-        
-      
+	    
+	    
+	    
+	    try:
+	    
+	    	nx.draw_random(graph,node_color='#A0CBE2',edge_color='Green',with_labels=False)
+	    	
+	    	if not os.path.exists(features.hashtag+"\\"+type_folder):
+			   os.makedirs(features.hashtag+"\\"+type_folder)
+	    	filename=features.hashtag+"\\"+type_folder+"\\"+str(time)+"_graph.png"	    
+	    	plt.savefig(filename)
+	    	plt.close()
+	    except:
+	    	plt.close()
+	    	pass	
 
-	G=nx.random_geometric_graph(200,0.125)
-# position is stored as node attribute data for random_geometric_graph
-	pos=nx.get_node_attributes(G,'pos')
-
-# find node near center (0.5,0.5)
-	dmin=1
-	ncenter=0
-	for n in pos:
-		x,y=pos[n]
-		d=(x-0.5)**2+(y-0.5)**2
-		if d<dmin:
-			ncenter=n
-			dmin=d
-
-# color by path length from node near center
-	p=nx.single_source_shortest_path_length(G,ncenter)
-
-	plt.figure(figsize=(8,8))
-	nx.draw_networkx_edges(G,pos,nodelist=[ncenter],alpha=0.4)
-	nx.draw_networkx_nodes(G,pos,nodelist=p.keys(),
-                       node_size=80,
-                       node_color=p.values(),
-                       cmap=plt.cm.Reds_r)
-
-	plt.xlim(-0.05,1.05)
-	plt.ylim(-0.05,1.05)
-	plt.axis('off')
-	plt.savefig('random_geometric_graph.png')
-	plt.show()
-	plt.close()
 def main():
    global follower_dict
    init_path()
