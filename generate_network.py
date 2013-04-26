@@ -162,11 +162,13 @@ def read_timeline():
     index=0
     
     print len(fread)
-    for line in range(3,5):#len(fread)):
+    for line in range(len(fread)):
     	try:
      		generate_graph_util(fread[line])
         except:
-        	raise
+        	print 'graph Passed'
+        	pass
+    plot_graph()
         
 def generate_graph_util(read):
 	
@@ -179,7 +181,7 @@ def generate_graph_util(read):
 	feature_set.average_tweet_time(timestamps)
 	feature_set.average_tweets(user_lists)
 	final_features_list.append(generate_dependent_graph(dep_network,feature_set))
-	plot_graph()
+	
 	'''ind_network,hashtag=generate_graph(read)
 	features=Feature_Set('2012-03-01','2012-05-30')
 	features.hashtag=hashtag
@@ -268,7 +270,7 @@ def plot_graph():
 	for features in final_features_list:
 		non_connected_component_ddict[features.hashtag]['x']=list(features.non_connected_nodes_dict.keys())
 		non_connected_component_ddict[features.hashtag]['y']=list(features.non_connected_nodes_dict.values())
-	generate_plot(growth_gcc_ddict,"Indiviual Nodes","Dates","Number of Independent Nodes","Non Connected Components",True)
+	generate_plot(growth_gcc_ddict,"Individual Nodes","Dates","Number of Independent Nodes","Non Connected Components",True)
 	
 	for features in final_features_list:
 		avg_hashtag_activity_ddict[features.hashtag]['y']=features.avg_hashtag_activity
@@ -283,30 +285,28 @@ def plot_graph():
 		xaxis.append(features.hashtag)
 		yaxis.append(features.avg_tweet_per_user)
 		
-	generate_histogram("Average Tweet per User","HashTag","Average per User",xaxis,yaxis)
+	generate_histogram("Average Tweet per User","HashTag","Average Tweets per User",xaxis,yaxis)
 
 def generate_histogram(title,xlabel,ylabel,x,y):
 	import numpy as np
-	
 	pos = np.arange(len(x))
-	
 	width = .3     # gives histogram aspect to the bar diagram
 	ax = plt.axes()
 	ax.set_xticks(pos + (width / 2))
 	ax.set_xticklabels(x)
+	plt.title(title)
+	plt.ylabel(ylabel)
+	plt.xlabel(xlabel)
 	plt.bar(pos,y, width, color='g')
 	plt.show()		
-	plt.savefig('AverageTweetsPerHashtags.pdf',dpi=600)
+	plt.savefig('AverageTweetsPerHashtags.svg',dpi=(600))
 	plt.close()
 	
 def generate_plot(dictionary,title,labelX,labelY,filename,flag):
-
-   
    figure=plt.figure()
-   
    plt.title(title)
-   plt.ylabel(labelX)
-   plt.xlabel(labelY)
+   plt.ylabel(labelY)
+   plt.xlabel(labelX)
    figure.autofmt_xdate()
    for hashtag in dictionary:
     	x=dictionary[hashtag]['x']
@@ -314,13 +314,13 @@ def generate_plot(dictionary,title,labelX,labelY,filename,flag):
     	 	x=dates.datestr2num(x)
      	y=dictionary[hashtag]['y']
      	if flag==True:
-      		plt.plot_date(x,y,'-',label=str(hashtag))
+      		plt.plot_date(x,y,'-',linewidth=2.0,label=str(hashtag))
       	else:
-      		plt.plot(x,y)		
+      		plt.plot(x,y,linewidth=3.0)		
    plt.legend(loc='upper left')
    plt.show()
-   plt.savefig(filename+'.pdf',dpi=600)
-   plt.close()
+   plt.savefig(filename,dpi=(600))
+   
 
 def generate_dependent_graph(network,features):
    
@@ -411,15 +411,10 @@ def draw_graph(graph,time,features,type_folder):
 def main():
    global final_features_list
    final_features_list=[]
-   edge_density_ddict=Ddict(dict)
-   new_user_ddict=Ddict(dict)
-   connected_component_ddict=Ddict(dict)
-   growth_gcc_ddict=Ddict(dict)
-		
    init_path()
    follower_dict=Ddict(dict)
    read_timeline()
-   print edge_density_ddict
+   
    	
 if __name__=='__main__':
 	   main()
