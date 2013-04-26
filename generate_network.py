@@ -164,7 +164,7 @@ def read_timeline():
     print len(fread)
     for line in range(len(fread)):
     	try:
-     		generate_graph_util(fread[line])
+    	    generate_graph_util(fread[line])
         except:
         	print 'graph Passed'
         	pass
@@ -239,7 +239,7 @@ def plot_graph():
 	non_connected_component_ddict=Ddict(dict)
 	avg_hashtag_activity_ddict=Ddict(dict)
 	avg_tweet_peruser_dict={}
-	
+	print "I AM HERE"
 	#if not os.path.exists(features.hashtag+"\\"+type_folder):
 		#os.makedirs(features.hashtag+"\\"+type_folder)
 	for features in final_features_list:
@@ -326,6 +326,7 @@ def generate_dependent_graph(network,features):
    
    db=connect_db()
    index=0
+   prev_graph_object=nx.Graph()
    
    for time in network:
        if index==0:
@@ -334,21 +335,21 @@ def generate_dependent_graph(network,features):
           graph.add_nodes_from(prev_list)
           graph=add_egdes(db,graph,prev_list)
           features_util(features,time,graph)
-          
+          prev_graph_object=graph
           #draw_graph(graph,time,features,"dependent")        
        else:
                
            current_list=network[time]
-           current_list.extend(prev_list)
-           
-           graph=nx.Graph()
-           
+           graph=nx.Graph()           
            graph.add_nodes_from(current_list)
            graph=add_egdes(db,graph,current_list)
-           prev_list=current_list
+           graph.add_nodes_from(prev_graph_object)
+           graph.add_edges_from(prev_graph_object.edges())
+           prev_graph_object=graph
+           
            features_util(features,time,graph)
-           #draw_graph(graph,time,features,"dependent")
        index+=1    
+           #draw_graph(graph,time,features,"dependent")
    
    return features
     
@@ -367,19 +368,34 @@ def generate_independent_graph(network,features):
    
 def add_egdes(db,graph,nodes):
 
+    follower_dict={}
+    
+    
     for node1 in nodes:
             for node2 in nodes:
                 first_flag=False
-                for first in db.my_collection.find({'follower':str(node1),'followee':str(node2)}):
-                     if first:
-                             first_flag=True
-                             
-                second_flag=False         
-                for second in db.my_collection.find({'follower':str(node2),'followee':str(node1)}):
-                     if second:
-                             second_flag=True
-                if first_flag==True or second_flag==True:
-                        graph.add_edge(node1,node2)
+                second_flag=False
+                if node1!=node2:
+                 	if node1 in follower_dict:
+                 		if follower_dict[node1]==node2:
+                 			break
+                 	if node2 in follower_dict:
+                 		if follower_dict[node2]==node1:
+                 			break
+                 		
+                 	for first in db.my_collection.find({'follower':str(node1),'followee':str(node2)}):
+                 		if first:
+                 			 follower_dict[node1]=node2
+                 			 follower_dict[node2]=node1
+                 			 first_flag=True
+                 	if first_flag==False:    
+					 	for second in db.my_collection.find({'follower':str(node2),'followee':str(node1)}):
+					 	    if second:
+					 	    	follower_dict[node1]=node2
+                 			 	follower_dict[node2]=node1
+                 			 	second_flag=True
+                	if first_flag==True or second_flag==True:
+                        	 graph.add_edge(node1,node2)
     return graph                    
 
 
